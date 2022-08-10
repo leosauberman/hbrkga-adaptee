@@ -106,6 +106,5 @@ if __name__ == '__main__':
 
     clf = HyperBRKGASearchCV(svc, parameters=params, data=iris.data, target=iris.target)
 
-    # clf = GridSearchCV(svc, parameters)
     clf.fit(iris.data, iris.target)
     print(clf.cv_results_)
