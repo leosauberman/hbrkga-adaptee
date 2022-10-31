@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import datetime
 from itertools import product
 
+import numpy
 import numpy as np
 from joblib import Parallel
 
@@ -20,7 +21,8 @@ from sklearn.metrics import check_scoring
 from sklearn.metrics._scorer import _check_multimetric_scoring
 from sklearn.model_selection import check_cv, train_test_split
 from sklearn.model_selection._search import BaseSearchCV, ParameterGrid, GridSearchCV
-from sklearn.model_selection._validation import _fit_and_score, _warn_or_raise_about_fit_failures, _insert_error_scores
+from sklearn.model_selection._validation import _fit_and_score, _warn_or_raise_about_fit_failures, _insert_error_scores, \
+    cross_val_score
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.utils import indexable
 from sklearn.utils.fixes import delayed
@@ -29,12 +31,13 @@ from sklearn.utils.validation import _check_fit_params
 
 class Decoder:
 
-    def __init__(self, parameters, estimator, X, y):
+    def __init__(self, parameters, estimator, X, y, cv):
         self._parameters = parameters
         self._estimator = estimator
         self._X = X
         self._y = y
         self._limits = [self._parameters[l] for l in list(self._parameters.keys())]
+        self._cv = cv
 
     def decode(self, chromosome: BaseChromosome, rewrite: bool) -> float:
         return self.score(self.encoder(chromosome))
@@ -47,6 +50,9 @@ class Decoder:
             gene = chromosome[geneIdx]
             key = list(self._parameters.keys())[geneIdx]
             limits = self._parameters[key]  # evita for's aninhados
+            if type(limits) is np.ndarray:
+                limits = limits.tolist()
+
             if type(limits[0]) is str:
                 hyperparameters[key] = limits[round(gene * (len(limits) - 1))]
             elif type(limits[0]) is int and len(limits) > 2:
@@ -67,7 +73,8 @@ class Decoder:
         except ValueError:
             return 0.0
 
-        return estimator_clone.score(self._X, self._y)
+        # return estimator_clone.score(self._X, self._y)
+        return cross_val_score(estimator_clone, self._X, self._y, cv=self._cv).mean()
 
 
 class HyperBRKGASearchCV(BaseSearchCV):
@@ -102,7 +109,7 @@ class HyperBRKGASearchCV(BaseSearchCV):
         self.brkga_config, _ = load_configuration("./hbrkga/config.conf")
         self._parameters = parameters
 
-        self.decoder = Decoder(self._parameters, estimator, data, target)
+        self.decoder = Decoder(self._parameters, estimator, data, target, cv)
         elite_number = int(self.brkga_config.elite_percentage * self.brkga_config.population_size)
         self.em_bo = BayesianOptimizerElites(decoder=self.decoder, e=0.3, steps=3, percentage=0.6,
                                              eliteNumber=elite_number)
@@ -202,7 +209,7 @@ class HyperBRKGASearchCV(BaseSearchCV):
                 "best_chromosome": best_chr,
                 "best_param_decoded": self.decoder.encoder(best_chr),
                 "best_param_score": best_cost,
-                "total_time": (datetime.now() - start),
+                "total_time": (datetime.now() - start).total_seconds(),
             }
 
         self._run_search(evaluate_candidates)
@@ -242,8 +249,8 @@ if __name__ == '__main__':
     }
 
     tree = DecisionTreeClassifier()
-    treeHBRKGA = DecisionTreeClassifier(criterion='entropy', max_depth=64, min_samples_leaf=2)
-    treeGS = DecisionTreeClassifier(criterion='gini', max_depth=4, min_samples_leaf=4)
+    # treeHBRKGA = DecisionTreeClassifier(criterion='entropy', max_depth=64, min_samples_leaf=2)
+    # treeGS = DecisionTreeClassifier(criterion='gini', max_depth=4, min_samples_leaf=4)
     iris = datasets.load_iris()
 
     # hyperbrkga = HyperBRKGASearchCV(tree, parameters=param_grid, cv=10, scoring='accuracy',
@@ -257,6 +264,13 @@ if __name__ == '__main__':
     grid.fit(iris.data, iris.target)
     print('GridSearch')
     print(grid.best_params_, grid.best_score_)
+    mean_fit_time = grid.cv_results_['mean_fit_time']
+    mean_score_time = grid.cv_results_['mean_score_time']
+    n_splits = grid.n_splits_  # number of splits of training data
+    import pandas as pd
+    n_iter = pd.DataFrame(grid.cv_results_).shape[0]  # Iterations per split
+
+    print(np.mean(mean_fit_time + mean_score_time) * n_splits * n_iter)
 
     # X_train, X_test, y_train, y_test = train_test_split(iris.data, iris.target, test_size=0.2, random_state=1, stratify=iris.target)
     #
