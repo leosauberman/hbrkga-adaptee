@@ -73,7 +73,6 @@ class Decoder:
         except ValueError:
             return 0.0
 
-        # return estimator_clone.score(self._X, self._y)
         return cross_val_score(estimator_clone, self._X, self._y, cv=self._cv).mean()
 
 
@@ -129,7 +128,6 @@ class HyperBRKGASearchCV(BaseSearchCV):
 
     def fit(self, X, y=None, *, groups=None, **fit_params):
         estimator = self.estimator
-        refit_metric = "score"
 
         if callable(self.scoring):
             scorers = self.scoring
@@ -138,7 +136,6 @@ class HyperBRKGASearchCV(BaseSearchCV):
         else:
             scorers = _check_multimetric_scoring(self.estimator, self.scoring)
             self._check_refit_for_multimetric(scorers)
-            refit_metric = self.refit
 
         X, y, groups = indexable(X, y, groups)
         fit_params = _check_fit_params(X, fit_params)
@@ -146,26 +143,10 @@ class HyperBRKGASearchCV(BaseSearchCV):
         cv_orig = check_cv(self.cv, y, classifier=is_classifier(estimator))
         n_splits = cv_orig.get_n_splits(X, y, groups)
 
-        base_estimator = clone(self.estimator)
-
-        fit_and_score_kwargs = dict(
-            scorer=scorers,
-            fit_params=fit_params,
-            return_train_score=self.return_train_score,
-            return_n_test_samples=True,
-            return_times=True,
-            return_parameters=False,
-            error_score=self.error_score,
-            verbose=self.verbose,
-        )
-
         def evaluate_candidates(candidate_params, cv=None, more_results=None):
             start = datetime.now()
-            cv = cv or cv_orig
             candidate_params = list(candidate_params)
-            n_candidates = len(candidate_params)
             all_candidate_params = []
-            all_more_results = defaultdict(list)
 
             for i in range(1, 11):
                 print("\n###############################################")
