@@ -36,8 +36,8 @@ if __name__ == '__main__':
     param_grid = {
         'criterion': ('gini', 'entropy', 'log_loss'),
         'splitter': ('best', 'random'),
-        # 'max_depth': np.arange(0, 64),
-        # 'min_samples_split': np.arange(0, 20),
+        'max_depth': np.arange(0, 64),
+        'min_samples_split': np.arange(0, 20),
         'min_samples_leaf': np.arange(0, 20)
     }
 
@@ -82,7 +82,7 @@ if __name__ == '__main__':
             'GridSearchParam': grid_param,
             'RandomSearchScore': random_score,
             'RandomSearchTime': random_time,
-            'RandomSearchParam': grid_param
+            'RandomSearchParam': random_param
         }
         df = df.append(row, ignore_index=True)
 
@@ -101,9 +101,19 @@ if __name__ == '__main__':
         if 'Param' not in i:
             means[i] = f'Média: {df[i].mean()}'
 
-    df = df.append(means, ignore_index=True)
+    stds = {
+        'HyperBRKGAScore': '',
+        'GridSearchScore': '',
+        'RandomSearchScore': '',
+    }
+    for i in df.columns:
+        if 'Score' in i:
+            stds[i] = f'Desvio Padrão: {df[i].std()}'
 
-    df.to_csv('results_4.csv')
+    df = df.append(means, ignore_index=True)
+    df = df.append(stds, ignore_index=True)
+
+    df.to_csv('pima_indians/res_final.csv')
 
     # new_tree = DecisionTreeClassifier(hbrkga_param)
     # new_tree.fit(X_transformed, y_train)
